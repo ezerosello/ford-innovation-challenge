@@ -227,6 +227,10 @@ MLflow es opcional: si está instalado (`py -3.12 -m pip install mlflow`), cada 
 
 `paso3_dashboard.py` calcula todos los datos y los inserta en `dashboard_template.html`, generando `salidas/dashboard.html`. Es un solo archivo, sin dependencias: se puede mandar por mail o abrir en la presentación sin internet.
 
+Para verlo: doble clic en `salidas/dashboard.html`, o desde la terminal `start salidas/dashboard.html`. Si se abre en un editor de código, usar clic derecho → "Abrir con" → Chrome o Edge.
+
+También genera `salidas/08_unidades_a_revisar.csv`: la lista completa de unidades a revisar de todos los días (201 en adelante), con prioridad, probabilidad, qué revisar primero, por qué y el resultado real. Está separada por `;` para que Excel en español la abra directamente en columnas.
+
 ### Qué muestra
 
 **Día de producción.** Selector de día (también con las flechas del teclado) y buscador de VIN. Para el día elegido: unidades producidas, cupo de revisión, cuántas de las elegidas necesitaban calibración y cuántas se esperaban al azar.
@@ -238,6 +242,10 @@ MLflow es opcional: si está instalado (`py -3.12 -m pip install mlflow`), cada 
 - **Resultado real:** solo para validar la demo. En planta ese dato se conoce después de la inspección.
 
 **Monitoreo del proceso.** Gráfico de control p de la tasa diaria de calibración. Cada día se compara con los 30 días normales anteriores (rango de ±3 desvíos). Si cae afuera, es alarma, y ese día no se usa como referencia para que la alarma no se "normalice" sola. Resultado: ninguna falsa alarma antes del día 260, y alarma en todos los días con datos suficientes desde el día 261. **El sistema habría detectado la medida de corte el mismo día.** Hacer clic en un punto lleva a ese día.
+
+**Todo el período.** Totales de todos los días (cuántas unidades revisadas necesitaban calibración contra lo esperable al azar), una tabla con el resumen de cada día (clic en una fila para ir a ese día) y el botón **Descargar lista completa (CSV)** con todas las unidades a revisar de todos los días.
+
+La selección se hace **día por día** y no sobre el total: los autos llegan a diario y se inspeccionan entre 0 y 5 días después del Gate Release, así que no se puede esperar al final del período para elegir el 5% de mayor riesgo. La lista total es la suma de las listas diarias.
 
 **¿Rinde más que el azar?** Curva de captura, precisión del modelo contra el azar y tabla de variantes.
 

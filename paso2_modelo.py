@@ -29,6 +29,13 @@ from model import (ModeloCalidad, metricas, metricas_azar, intervalo_lift,
 
 pd.set_option("display.width", 200)
 
+
+def cupo_diario(n_unidades):
+    """Cuántas unidades se revisan en un día: el 5%, redondeando al entero más
+    cercano (0,5 hacia arriba) y como mínimo 1."""
+    return max(1, int(np.floor(n_unidades * PRESUPUESTO_INSPECCION + 0.5)))
+
+
 # ---------------------------------------------------------------- 0. Datos
 if not RUTA_TRAIN.exists():
     raise SystemExit("Primero corré: python paso1_preparar_datos.py")
@@ -107,7 +114,7 @@ ranking["prob_calibracion"] = p_final
 ranking["prioridad_en_el_dia"] = (ranking.groupby("dia_salida_qls")["prob_calibracion"]
                                   .rank(ascending=False, method="first").astype(int))
 cupo = ranking.groupby("dia_salida_qls")["y"].transform(
-    lambda s: max(1, int(round(len(s) * PRESUPUESTO_INSPECCION))))
+    lambda s: cupo_diario(len(s)))
 ranking["revisar"] = ranking["prioridad_en_el_dia"] <= cupo
 ranking = ranking.sort_values(["dia_salida_qls", "prioridad_en_el_dia"])
 ranking.to_csv(RUTA_RANKING)

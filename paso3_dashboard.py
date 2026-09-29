@@ -30,6 +30,14 @@ from model import metricas, intervalo_lift
 
 RUTA_TEMPLATE = Path(__file__).parent / "dashboard_template.html"
 RUTA_DASHBOARD = CARPETA_SALIDAS / "dashboard.html"
+RUTA_LISTA_TOTAL = CARPETA_SALIDAS / "08_unidades_a_revisar.csv"
+
+
+def cupo_diario(n_unidades):
+    """Cuántas unidades se revisan en un día: el 5%, redondeando al entero más
+    cercano (0,5 hacia arriba) y como mínimo 1."""
+    return max(1, int(np.floor(n_unidades * PRESUPUESTO_INSPECCION + 0.5)))
+
 
 for requerido in [RUTA_MODELO, RUTA_RESULTADOS]:
     if not requerido.exists():
@@ -164,6 +172,46 @@ for i, (vin, fila) in enumerate(evaluar.iterrows()):
     unidades.append([vin, int(fila["dia_salida_qls"]), fila["catalogo"],
                      round(float(prob[i]), 4), int(fila["y"]), real, factores])
 
+# ============================================================ 4b. Lista total
+# La selección se hace DÍA POR DÍA (el 5% de mayor riesgo de cada día), porque
+# en planta los autos llegan a diario y se inspeccionan a los pocos días del
+# Gate Release: no se puede esperar al final del mes para elegir. La "lista
+# total" es la unión de las listas diarias.
+todas = pd.DataFrame(unidades, columns=["vin", "dia", "catalogo", "prob_calibracion",
+                                        "y", "componente_real", "factores"])
+todas["prioridad_en_el_dia"] = (todas.groupby("dia")["prob_calibracion"]
+                                .rank(ascending=False, method="first").astype(int))
+cupo_dia = todas.groupby("dia")["vin"].transform(
+    lambda s: cupo_diario(len(s)))
+lista = todas[todas["prioridad_en_el_dia"] <= cupo_dia].sort_values(["dia", "prioridad_en_el_dia"])
+
+
+def texto_componentes(cat):
+    partes = []
+    for v in sugerencias.get(cat, []):
+        info = componentes_info.get(v, {})
+        partes.append(f"{v} ({info.get('desc') or 'sin descripción'}; área {info.get('area') or 's/d'})")
+    return " | ".join(partes)
+
+
+lista_csv = pd.DataFrame({
+    "dia": lista["dia"],
+    "prioridad_en_el_dia": lista["prioridad_en_el_dia"],
+    "vin": lista["vin"],
+    "catalogo": lista["catalogo"],
+    "prob_calibracion": lista["prob_calibracion"],
+    "que_revisar_primero": lista["catalogo"].map(texto_componentes),
+    "por_que": lista["factores"].map(lambda fs: "; ".join(vocabulario[f] for f, _ in fs)),
+    "resultado_real_solo_validacion": [f"CALIBRADA ({c})" if y else "OK"
+                                       for y, c in zip(lista["y"], lista["componente_real"])],
+})
+# sep=";" y decimal="," para que Excel en español lo abra bien en columnas
+lista_csv.to_csv(RUTA_LISTA_TOTAL, sep=";", decimal=",", index=False, encoding="utf-8-sig")
+for nombre, desde, hasta in [("Período de test", DIA_FIN_TRAIN + 1, DIA_MEDIDA_CORTE),
+                             ("Post-corte", DIA_MEDIDA_CORTE + 1, 10**6)]:
+    parte = lista[(lista["dia"] >= desde) & (lista["dia"] <= hasta)]
+    print(f"  {nombre}: {len(parte)} unidades a revisar, {int(parte['y'].sum())} necesitaban calibración")
+
 # ============================================================ 5. Monitoreo
 # Gráfico de control p: para cada día, la tasa de calibración se compara con
 # los últimos 30 días "normales". Si cae fuera de ±3 desvíos, es alarma, y ese
@@ -203,7 +251,7 @@ captura = [round(float(acum[max(0, int(len(acum) * q / 100) - 1)]), 4) if q else
 sel = pd.DataFrame({"dia": test["dia_salida_qls"].values, "p": p_test, "y": y_test})
 sel["rank"] = sel.groupby("dia")["p"].rank(ascending=False, method="first")
 sel["cupo"] = sel.groupby("dia")["p"].transform(
-    lambda s: max(1, int(round(len(s) * PRESUPUESTO_INSPECCION))))
+    lambda s: cupo_diario(len(s)))
 diaria = sel[sel["rank"] <= sel["cupo"]]
 
 comparacion = pd.read_csv(RUTA_RESULTADOS, index_col=0)
@@ -243,5 +291,6 @@ datos = {
 html = RUTA_TEMPLATE.read_text(encoding="utf-8")
 html = html.replace("/*__DATOS__*/null", json.dumps(datos, ensure_ascii=False))
 RUTA_DASHBOARD.write_text(html, encoding="utf-8")
-print(f"\nDashboard generado: {RUTA_DASHBOARD}")
+print(f"\nLista total de unidades a revisar: {RUTA_LISTA_TOTAL}")
+print(f"Dashboard generado: {RUTA_DASHBOARD}")
 print("Abrilo con doble clic (se ve en cualquier navegador).")

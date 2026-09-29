@@ -116,6 +116,12 @@ tr.foco td { outline: 2px solid var(--accent); outline-offset: -2px; }
 .comp-tabla td, .comp-tabla th { padding: 6px 8px; font-size: 0.88rem; }
 .imp { display: grid; grid-template-columns: minmax(140px, 1fr) 2fr; gap: 6px 12px; align-items: center; font-size: 0.88rem; }
 .imp .b { height: 12px; background: var(--accent); border-radius: 3px; }
+.resumen { max-height: 380px; overflow-y: auto; margin-top: 12px; }
+.resumen td, .resumen th { padding: 7px 12px; }
+.resumen tr.clic { cursor: pointer; }
+.resumen tr.clic:hover td { background: var(--accent-soft); }
+.resumen tr.actual td { background: var(--accent-soft); font-weight: 600; }
+.acciones { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
 footer { margin-top: 40px; font-size: 0.85rem; color: var(--muted); max-width: 80ch; }
 
 @media (max-width: 900px) {
@@ -173,6 +179,19 @@ footer { margin-top: 40px; font-size: 0.85rem; color: var(--muted); max-width: 8
       </table>
       <div class="pie-tabla"><button class="btn sec" id="verTodas"></button></div>
     </div>
+  </section>
+
+  <section>
+    <h2>Todo el período</h2>
+    <p class="ayuda">La selección se hace día por día: cada día se revisa el 5% de mayor riesgo de ese día, porque los autos llegan a diario y se inspeccionan pocos días después del Gate Release. La lista total es la suma de las listas diarias.</p>
+    <div class="comparar" id="totales"></div>
+    <div class="acciones">
+      <button class="btn" id="descargar">Descargar lista completa (CSV)</button>
+      <span class="muted" id="msgDescarga"></span>
+    </div>
+    <div class="tabla-cont resumen"><table style="min-width:640px">
+      <thead><tr><th>Día</th><th>Unidades</th><th>A revisar</th><th>Necesitaban calibración</th><th>Esperables al azar</th><th>Control del proceso</th></tr></thead>
+      <tbody id="resumenDias"></tbody></table></div>
   </section>
 
   <section>
@@ -307,6 +326,7 @@ function mostrarDia() {
   $("verTodas").textContent = verTodas ? "Mostrar solo las primeras" : `Mostrar las ${lista.length} unidades del día`;
   $("verTodas").style.display = lista.length > mostrar.length || verTodas ? "" : "none";
   dibujarControl();
+  dibujarResumen();
 }
 
 $("prev").onclick = () => { if (idx > 0) { idx--; verTodas = false; mostrarDia(); } };
@@ -335,6 +355,60 @@ document.addEventListener("keydown", e => {
   if (e.key === "ArrowLeft") $("prev").click();
   if (e.key === "ArrowRight") $("next").click();
 });
+
+// ---------- Todo el período ----------
+const resumen = dias.map(d => {
+  const l = porDia.get(d), sel = l.filter(u => u.revisar);
+  const tasa = l.filter(u => u.y === 1).length / l.length;
+  return { d, n: l.length, r: sel.length, k: sel.filter(u => u.y === 1).length, e: sel.length * tasa, c: controlPorDia.get(d) };
+});
+function totales(desde, hasta) {
+  return resumen.filter(x => x.d >= desde && x.d <= hasta)
+    .reduce((a, x) => ({ n: a.n + x.n, r: a.r + x.r, k: a.k + x.k, e: a.e + x.e }), { n: 0, r: 0, k: 0, e: 0 });
+}
+const tT = totales(D.finTrain + 1, D.corte), tP = totales(D.corte + 1, 1e9);
+$("totales").innerHTML = `
+  <div class="kpi" style="max-width:330px"><span class="grande">${num(tT.k)} de ${num(tT.r)}</span>
+    <span class="muted">unidades revisadas necesitaban calibración entre los días ${D.finTrain + 1} y ${D.corte} (${pct(tT.r ? tT.k / tT.r : 0)}). Revisando la misma cantidad al azar se esperaban ${num(tT.e, 0)}.</span></div>` +
+  (tP.r ? `<div class="kpi" style="max-width:330px"><span class="grande">${num(tP.k)} de ${num(tP.r)}</span>
+    <span class="muted">después de la medida de corte (días ${D.corte + 1} en adelante). Casi no hay calibraciones: el proceso cambió.</span></div>` : "");
+
+function dibujarResumen() {
+  const actual = dias[idx];
+  $("resumenDias").innerHTML = resumen.map(x => {
+    let estado = "normal";
+    if (x.c && x.c.alarma) estado = '<span style="color:var(--alarm);font-weight:600">alarma</span>';
+    else if (x.c && x.c.n < 50) estado = '<span class="muted">pocos datos</span>';
+    return `<tr class="clic ${x.d === actual ? "actual" : ""}" data-dia="${x.d}">
+      <td>${x.d}</td><td>${num(x.n)}</td><td>${num(x.r)}</td><td>${num(x.k)}</td><td>${num(x.e, 1)}</td><td>${estado}</td></tr>`;
+  }).join("");
+}
+$("resumenDias").addEventListener("click", e => {
+  const tr = e.target.closest("tr[data-dia]");
+  if (!tr) return;
+  idx = dias.indexOf(+tr.dataset.dia); verTodas = false; vinFoco = null; mostrarDia();
+  document.querySelector(".dia").scrollIntoView({ behavior: "smooth", block: "start" });
+});
+
+$("descargar").onclick = () => {
+  const textoComp = v => {
+    const c = D.componentes[v] || {};
+    return `${v} (${c.desc || "sin descripción"}; área ${c.area || "s/d"})`;
+  };
+  const filas = [["dia", "prioridad_en_el_dia", "vin", "catalogo", "prob_calibracion",
+                  "que_revisar_primero", "por_que", "resultado_real_solo_validacion"]];
+  for (const d of dias) for (const u of porDia.get(d)) if (u.revisar) filas.push([
+    u.dia, u.rank, u.vin, u.cat, String(u.p).replace(".", ","),
+    (D.sugerencias[u.cat] || []).map(textoComp).join(" | "),
+    u.fac.map(([f]) => D.factores[f]).join("; "),
+    u.y === 1 ? `CALIBRADA (${u.real || "s/d"})` : "OK"]);
+  const csv = filas.map(f => f.map(v => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\r\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }));
+  a.download = "unidades_a_revisar.csv";
+  document.body.appendChild(a); a.click(); a.remove();
+  $("msgDescarga").textContent = `Descargadas ${num(filas.length - 1)} unidades (días ${dias[0]} a ${dias[dias.length - 1]}).`;
+};
 
 // ---------- Gráfico de control ----------
 function dibujarControl() {
