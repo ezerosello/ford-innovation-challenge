@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Inspección Adicional: prioridad diaria</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #EEF1F4; --surface: #FFFFFF; --ink: #1B2430; --muted: #5E6B7A; --line: #D5DBE2;
+  --accent: #1F4E9C; --accent-soft: #E3EBF7; --safety: #F2B705; --safety-soft: #FFF6D6;
+  --alarm: #C8332B; --ok: #2E7D5B; --band: rgba(31, 78, 156, 0.10);
+  --sans: "Barlow", system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+  --cond: "Barlow Condensed", "Arial Narrow", "Segoe UI", system-ui, sans-serif;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #151B22; --surface: #1C242D; --ink: #E4E9EF; --muted: #9AA7B5; --line: #2E3945;
+    --accent: #8DB3F0; --accent-soft: #1F2F47; --safety: #E3B227; --safety-soft: #3A3216;
+    --alarm: #EE6A60; --ok: #5CC08F; --band: rgba(141, 179, 240, 0.13);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #151B22; --surface: #1C242D; --ink: #E4E9EF; --muted: #9AA7B5; --line: #2E3945;
+  --accent: #8DB3F0; --accent-soft: #1F2F47; --safety: #E3B227; --safety-soft: #3A3216;
+  --alarm: #EE6A60; --ok: #5CC08F; --band: rgba(141, 179, 240, 0.13);
+}
+*, *::before, *::after { box-sizing: inherit; }
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans);
+  font-size: 16px; line-height: 1.45; font-variant-numeric: tabular-nums; }
+.wrap { max-width: 1200px; margin: 0 auto; padding: 24px 20px 48px; }
+h1, h2 { font-family: var(--cond); font-weight: 600; letter-spacing: 0.01em; margin: 0; }
+h1 { font-size: 2rem; line-height: 1.1; }
+h2 { font-size: 1.5rem; margin-bottom: 6px; }
+p { margin: 0; }
+.muted { color: var(--muted); }
+.top { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px;
+  align-items: flex-end; margin-bottom: 20px; }
+.top .sub { color: var(--muted); max-width: 60ch; margin-top: 4px; }
+.top .meta { color: var(--muted); font-size: 0.875rem; }
+
+/* ---------- Banda del día (elemento principal) ---------- */
+.dia { background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  padding: 18px 20px; display: grid; gap: 16px 32px;
+  grid-template-columns: auto 1fr auto; align-items: center; }
+.selector { display: flex; align-items: center; gap: 10px; }
+.contador { display: flex; flex-direction: column; align-items: center; min-width: 118px; }
+.contador .lbl { font-size: 0.8rem; color: var(--muted); }
+.contador .num { font-family: var(--cond); font-size: 3.4rem; line-height: 1; font-weight: 600; }
+button, select, input { font: inherit; color: inherit; }
+.paso { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line);
+  background: var(--bg); font-size: 1.5rem; line-height: 1; cursor: pointer; }
+.paso:hover { border-color: var(--accent); }
+.paso:disabled { opacity: 0.35; cursor: default; }
+select, input[type="search"] { background: var(--bg); border: 1px solid var(--line);
+  border-radius: 6px; padding: 8px 10px; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.estado { display: inline-block; font-size: 0.875rem; padding: 3px 10px; border-radius: 999px;
+  background: var(--accent-soft); margin-bottom: 8px; }
+.estado.alarma { background: var(--alarm); color: #fff; }
+.stats { display: flex; flex-wrap: wrap; gap: 8px 22px; }
+.stat b { display: block; font-family: var(--cond); font-size: 1.75rem; line-height: 1.1; font-weight: 600; }
+.stat span { font-size: 0.85rem; color: var(--muted); }
+.frase { margin-top: 8px; max-width: 70ch; }
+.buscar { display: flex; gap: 8px; align-items: center; }
+.buscar input { width: 150px; }
+.btn { border: 1px solid var(--accent); background: var(--accent); color: var(--surface);
+  border-radius: 6px; padding: 8px 14px; cursor: pointer; font-weight: 500; }
+.btn.sec { background: transparent; color: var(--accent); }
+#msgBuscar { font-size: 0.85rem; min-height: 1.2em; }
+
+/* ---------- Lista ---------- */
+section { margin-top: 32px; }
+.ayuda { color: var(--muted); max-width: 75ch; margin-bottom: 12px; }
+.tabla-cont { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; min-width: 980px; }
+th { text-align: left; font-family: var(--cond); font-weight: 500; font-size: 1rem; color: var(--muted);
+  padding: 10px 12px; border-bottom: 1px solid var(--line); background: var(--surface); position: sticky; top: 0; }
+td { padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; font-size: 0.92rem; }
+tr.revisar td { background: var(--safety-soft); }
+tr.revisar td:first-child { box-shadow: inset 6px 0 0 var(--safety); }
+tr.foco td { outline: 2px solid var(--accent); outline-offset: -2px; }
+.prio { font-family: var(--cond); font-size: 1.25rem; font-weight: 600; }
+.tag { display: inline-block; font-size: 0.75rem; padding: 1px 7px; border-radius: 4px;
+  background: var(--safety); color: #1B2430; margin-top: 2px; font-weight: 600; }
+.riesgo { min-width: 120px; }
+.barra { height: 8px; background: var(--bg); border-radius: 4px; margin-top: 4px; overflow: hidden; }
+.barra i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+.chips { display: flex; flex-direction: column; gap: 4px; }
+.chip { font-size: 0.85rem; }
+.chip b { font-weight: 600; }
+.chip .area { color: var(--muted); }
+.factores { margin: 0; padding-left: 16px; color: var(--ink); font-size: 0.85rem; }
+.real-ok { color: var(--muted); }
+.real-cal { color: var(--alarm); font-weight: 600; }
+.acierto { color: var(--ok); font-size: 0.8rem; display: block; font-weight: 500; }
+.pie-tabla { display: flex; justify-content: center; padding: 12px; }
+
+/* ---------- Gráficos ---------- */
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+.grafico svg { width: 100%; height: auto; display: block; }
+.leyenda { display: flex; flex-wrap: wrap; gap: 6px 20px; font-size: 0.85rem; color: var(--muted); margin-top: 8px; }
+.leyenda i { display: inline-block; width: 14px; height: 10px; margin-right: 6px; vertical-align: middle; border-radius: 2px; }
+.dos { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+.kpi { max-width: 200px; }
+.kpi .grande { display: block; font-family: var(--cond); font-size: 2.6rem; font-weight: 600; line-height: 1.05; }
+.kpi .muted { font-size: 0.85rem; }
+.comparar { display: flex; gap: 28px; flex-wrap: wrap; margin: 10px 0 16px; }
+.comp-tabla { min-width: 0; margin-top: 16px; }
+.comp-tabla td, .comp-tabla th { padding: 6px 8px; font-size: 0.88rem; }
+.imp { display: grid; grid-template-columns: minmax(140px, 1fr) 2fr; gap: 6px 12px; align-items: center; font-size: 0.88rem; }
+.imp .b { height: 12px; background: var(--accent); border-radius: 3px; }
+footer { margin-top: 40px; font-size: 0.85rem; color: var(--muted); max-width: 80ch; }
+
+@media (max-width: 900px) {
+  .dia { grid-template-columns: 1fr; }
+  .dos { grid-template-columns: 1fr; }
+  .contador .num { font-size: 2.8rem; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  tr.foco td { transition: background-color 0.6s; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Inspección Adicional: prioridad diaria</h1>
+      <p class="sub">Qué unidades revisar cada día y qué mirar en cada una, a partir del historial QLS.</p>
+    </div>
+    <p class="meta" id="meta"></p>
+  </header>
+
+  <div class="dia" aria-label="Día de producción">
+    <div class="selector">
+      <button class="paso" id="prev" aria-label="Día anterior">‹</button>
+      <div class="contador"><span class="lbl">Día de producción</span><span class="num" id="diaNum">-</span></div>
+      <button class="paso" id="next" aria-label="Día siguiente">›</button>
+    </div>
+    <div>
+      <span class="estado" id="estadoDia"></span>
+      <div class="stats" id="statsDia"></div>
+      <p class="frase" id="fraseDia"></p>
+    </div>
+    <div>
+      <label for="diaSel" class="muted" style="font-size:.85rem">Ir al día</label><br>
+      <select id="diaSel"></select>
+      <div class="buscar" style="margin-top:10px">
+        <input type="search" id="vin" placeholder="Buscar VIN" aria-label="Buscar VIN">
+        <button class="btn" id="btnBuscar">Buscar</button>
+      </div>
+      <div id="msgBuscar" class="muted"></div>
+    </div>
+  </div>
+
+  <section>
+    <h2>Unidades del día, de mayor a menor riesgo</h2>
+    <p class="ayuda" id="ayudaLista"></p>
+    <div class="tabla-cont">
+      <table>
+        <thead><tr>
+          <th>Prioridad</th><th>VIN</th><th>Catálogo</th><th>Riesgo</th>
+          <th>Qué revisar primero</th><th>Por qué subió su riesgo</th><th>Resultado real</th>
+        </tr></thead>
+        <tbody id="filas"></tbody>
+      </table>
+      <div class="pie-tabla"><button class="btn sec" id="verTodas"></button></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Monitoreo del proceso</h2>
+    <p class="ayuda" id="resumenControl"></p>
+    <div class="panel grafico"><div id="control"></div>
+      <div class="leyenda">
+        <span><i style="background:var(--ink)"></i>Tasa diaria de calibración</span>
+        <span><i style="background:var(--band)"></i>Rango normal (±3 desvíos de los últimos 30 días)</span>
+        <span><i style="background:var(--alarm)"></i>Día en alarma</span>
+        <span><i style="background:var(--accent)"></i>Tasa que espera el modelo</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="dos">
+    <div>
+      <h2>¿Rinde más que el azar?</h2>
+      <p class="ayuda" id="textoEvidencia"></p>
+      <div class="comparar" id="comparar"></div>
+      <div class="panel grafico"><div id="captura"></div>
+        <div class="leyenda">
+          <span><i style="background:var(--accent)"></i>Ordenando por el modelo</span>
+          <span><i style="background:var(--muted)"></i>Al azar (método actual)</span>
+        </div>
+      </div>
+      <div class="tabla-cont comp-tabla"><table style="min-width:0">
+        <thead><tr><th>Variante probada</th><th>Precisión en el 5%</th><th>Veces mejor que el azar</th></tr></thead>
+        <tbody id="variantes"></tbody></table></div>
+    </div>
+    <div>
+      <h2>Qué mira el modelo</h2>
+      <p class="ayuda">Cuánto empeora el modelo si se desordena cada variable. Cuanto más larga la barra, más depende de ella.</p>
+      <div class="panel imp" id="importancia"></div>
+      <p class="ayuda" id="textoComponentes" style="margin-top:16px"></p>
+    </div>
+  </section>
+
+  <footer>
+    Datos ficticios provistos por Ford para el Innovation Challenge III. La columna «Resultado real»
+    existe solo para validar la demo: en planta ese dato se conoce después de la inspección.
+    Los días 201 a 260 no se usaron para entrenar; desde el día 261 rige la medida de corte.
+  </footer>
+</div>
+
+<script>
+const D = /*__DATOS__*/null;
+
+const pct = (x, d = 1) => (x == null ? "-" : (x * 100).toLocaleString("es-AR", { minimumFractionDigits: d, maximumFractionDigits: d }) + "%");
+const num = (x, d = 0) => x.toLocaleString("es-AR", { minimumFractionDigits: d, maximumFractionDigits: d });
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const $ = id => document.getElementById(id);
+
+// ---------- Preparación ----------
+const porDia = new Map();
+for (const u of D.unidades) {
+  const [vin, dia, cat, p, y, real, fac] = u;
+  if (!porDia.has(dia)) porDia.set(dia, []);
+  porDia.get(dia).push({ vin, dia, cat, p, y, real, fac });
+}
+for (const lista of porDia.values()) {
+  lista.sort((a, b) => b.p - a.p);
+  const cupo = Math.max(1, Math.round(lista.length * D.presupuesto));
+  lista.forEach((u, i) => { u.rank = i + 1; u.revisar = i < cupo; });
+}
+const dias = [...porDia.keys()].sort((a, b) => a - b);
+const controlPorDia = new Map(D.control.map(c => [c.d, c]));
+let idx = 0, verTodas = false, vinFoco = null;
+
+$("meta").textContent = `Modelo: ${D.variante}. Generado el ${D.generado}.`;
+$("diaSel").innerHTML = dias.map(d => `<option value="${d}">Día ${d} (${porDia.get(d).length} unidades)</option>`).join("");
+
+function descComp(v) {
+  const c = D.componentes[v] || {};
+  const desc = c.desc ? esc(c.desc) : "sin descripción en QLS";
+  const area = c.area ? ` <span class="area">área ${esc(c.area)}</span>` : "";
+  return `<span class="chip"><b>${esc(v)}</b> ${desc}${area}</span>`;
+}
+
+// ---------- Vista del día ----------
+function mostrarDia() {
+  const dia = dias[idx];
+  const lista = porDia.get(dia);
+  const sel = lista.filter(u => u.revisar);
+  const encontradas = sel.filter(u => u.y === 1).length;
+  const tasaDia = lista.filter(u => u.y === 1).length / lista.length;
+  const esperadasAzar = sel.length * tasaDia;
+  const c = controlPorDia.get(dia);
+
+  $("diaNum").textContent = dia;
+  $("diaSel").value = dia;
+  $("prev").disabled = idx === 0;
+  $("next").disabled = idx === dias.length - 1;
+
+  const est = $("estadoDia");
+  est.className = "estado";
+  if (c && c.alarma) { est.textContent = "Alarma: la tasa de calibración salió del rango normal"; est.classList.add("alarma"); }
+  else if (dia > D.corte) est.textContent = "Después de la medida de corte";
+  else if (c && c.n < 50) est.textContent = "Día con muy pocas unidades para el control";
+  else est.textContent = "Proceso dentro del rango normal";
+
+  $("statsDia").innerHTML = `
+    <div class="stat"><b>${num(lista.length)}</b><span>unidades del día</span></div>
+    <div class="stat"><b>${num(sel.length)}</b><span>a revisar (cupo ${pct(D.presupuesto, 0)})</span></div>
+    <div class="stat"><b>${num(encontradas)}</b><span>necesitaban calibración</span></div>`;
+  $("fraseDia").textContent = sel.length
+    ? `Revisando las ${sel.length} unidades elegidas por el modelo, ${encontradas} necesitaban calibración. Eligiendo la misma cantidad al azar se esperaban ${num(esperadasAzar, 1)}.`
+    : "";
+  $("ayudaLista").textContent = `Las filas en amarillo son el cupo de revisión del día (las ${sel.length} de mayor riesgo). «Qué revisar primero» son los 3 componentes que más se calibraron históricamente en autos de esa versión y mercado.`;
+
+  const mostrar = verTodas ? lista : lista.slice(0, Math.max(40, sel.length + 10));
+  const maxP = lista[0].p || 1;
+  $("filas").innerHTML = mostrar.map(u => {
+    const sug = D.sugerencias[u.cat] || [];
+    const factores = u.fac.length
+      ? `<ul class="factores">${u.fac.map(([f]) => `<li>${esc(D.factores[f])}</li>`).join("")}</ul>`
+      : `<span class="muted">sin factores que suban el riesgo</span>`;
+    let real = `<span class="real-ok">OK</span>`;
+    if (u.y === 1) {
+      real = `<span class="real-cal">Calibrada: ${esc(u.real || "s/d")}</span>`;
+      if (sug.includes(u.real)) real += `<span class="acierto">estaba en la lista sugerida</span>`;
+    }
+    return `<tr class="${u.revisar ? "revisar" : ""} ${u.vin === vinFoco ? "foco" : ""}" id="fila-${esc(u.vin)}">
+      <td><span class="prio">${u.rank}</span>${u.revisar ? '<br><span class="tag">Revisar</span>' : ""}</td>
+      <td>${esc(u.vin)}</td>
+      <td>${esc(u.cat)}</td>
+      <td class="riesgo">${pct(u.p)}<div class="barra"><i style="width:${(u.p / maxP * 100).toFixed(1)}%"></i></div></td>
+      <td><div class="chips">${sug.map(descComp).join("")}</div></td>
+      <td>${factores}</td>
+      <td>${real}</td></tr>`;
+  }).join("");
+  $("verTodas").textContent = verTodas ? "Mostrar solo las primeras" : `Mostrar las ${lista.length} unidades del día`;
+  $("verTodas").style.display = lista.length > mostrar.length || verTodas ? "" : "none";
+  dibujarControl();
+}
+
+$("prev").onclick = () => { if (idx > 0) { idx--; verTodas = false; mostrarDia(); } };
+$("next").onclick = () => { if (idx < dias.length - 1) { idx++; verTodas = false; mostrarDia(); } };
+$("diaSel").onchange = e => { idx = dias.indexOf(+e.target.value); verTodas = false; mostrarDia(); };
+$("verTodas").onclick = () => { verTodas = !verTodas; mostrarDia(); };
+
+function buscar() {
+  let q = $("vin").value.trim().toUpperCase();
+  if (!q) return;
+  if (/^\d+$/.test(q)) q = "VIN_" + q;
+  const u = D.unidades.find(x => x[0].toUpperCase() === q);
+  if (!u) { $("msgBuscar").textContent = `No encontré ${q} entre los días ${dias[0]} y ${dias[dias.length - 1]}.`; return; }
+  vinFoco = u[0]; idx = dias.indexOf(u[1]);
+  const lista = porDia.get(u[1]);
+  const pos = lista.findIndex(x => x.vin === u[0]);
+  verTodas = pos >= Math.max(40, lista.filter(x => x.revisar).length + 10);
+  mostrarDia();
+  $("msgBuscar").textContent = `${u[0]}: día ${u[1]}, prioridad ${pos + 1} de ${lista.length}.`;
+  document.getElementById("fila-" + u[0])?.scrollIntoView({ block: "center", behavior: "smooth" });
+}
+$("btnBuscar").onclick = buscar;
+$("vin").addEventListener("keydown", e => { if (e.key === "Enter") buscar(); });
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+  if (e.key === "ArrowLeft") $("prev").click();
+  if (e.key === "ArrowRight") $("next").click();
+});
+
+// ---------- Gráfico de control ----------
+function dibujarControl() {
+  const W = 960, H = 290, m = { l: 46, r: 14, t: 26, b: 34 };
+  const pw = W - m.l - m.r, ph = H - m.t - m.b;
+  const maxD = D.control[D.control.length - 1].d, yMax = 0.25;
+  const x = d => m.l + (d - 0.5) / maxD * pw;
+  const y = v => m.t + ph - Math.min(v, yMax) / yMax * ph;
+  const bw = pw / maxD;
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Gráfico de control de la tasa diaria de calibración">`;
+  for (let v = 0; v <= yMax + 1e-9; v += 0.05) {
+    s += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/>`;
+    s += `<text x="${m.l - 6}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="var(--muted)">${Math.round(v * 100)}%</text>`;
+  }
+  for (let d = 20; d <= maxD; d += 40)
+    s += `<text x="${x(d)}" y="${H - 12}" text-anchor="middle" font-size="11" fill="var(--muted)">día ${d}</text>`;
+  for (const c of D.control) if (c.lcl != null)
+    s += `<rect x="${x(c.d) - bw / 2}" y="${y(c.ucl)}" width="${bw + 0.3}" height="${Math.max(0, y(c.lcl) - y(c.ucl))}" fill="var(--band)"/>`;
+  for (const [d, txt] of [[D.finTrain, "fin del entrenamiento"], [D.corte, "medida de corte"]]) {
+    s += `<line x1="${x(d + 0.5)}" x2="${x(d + 0.5)}" y1="${m.t}" y2="${m.t + ph}" stroke="var(--muted)" stroke-dasharray="4 4"/>`;
+    s += `<text x="${x(d + 0.5) - 4}" y="${m.t - 8}" text-anchor="end" font-size="11" fill="var(--muted)">${txt}</text>`;
+  }
+  const esp = D.control.filter(c => c.esperada != null && c.n >= 50);
+  s += `<polyline fill="none" stroke="var(--accent)" stroke-width="2" stroke-dasharray="6 3" points="${esp.map(c => `${x(c.d)},${y(c.esperada)}`).join(" ")}"/>`;
+  const diaSel = dias[idx];
+  s += `<line x1="${x(diaSel)}" x2="${x(diaSel)}" y1="${m.t}" y2="${m.t + ph}" stroke="var(--accent)" stroke-width="2" opacity=".5"/>`;
+  for (const c of D.control) {
+    if (c.n < 50) continue;
+    const r = c.alarma ? 3.6 : 2.2, col = c.alarma ? "var(--alarm)" : "var(--ink)";
+    s += `<circle cx="${x(c.d)}" cy="${y(c.tasa)}" r="${r}" fill="${col}"/>`;
+  }
+  for (const c of D.control) {
+    const clic = porDia.has(c.d) ? ` data-dia="${c.d}" style="cursor:pointer"` : "";
+    s += `<rect x="${x(c.d) - bw / 2}" y="${m.t}" width="${bw}" height="${ph}" fill="transparent"${clic}><title>Día ${c.d}: ${pct(c.tasa)} calibradas (${c.n} unidades)${c.alarma ? ", ALARMA" : ""}</title></rect>`;
+  }
+  s += "</svg>";
+  $("control").innerHTML = s;
+  $("control").querySelectorAll("rect[data-dia]").forEach(r =>
+    r.addEventListener("click", () => { idx = dias.indexOf(+r.dataset.dia); verTodas = false; mostrarDia(); }));
+}
+
+const alarmas = D.control.filter(c => c.alarma);
+const antes = alarmas.filter(c => c.d <= D.corte), despues = alarmas.filter(c => c.d > D.corte);
+const primeraPost = despues[0];
+$("resumenControl").textContent =
+  `Cada punto es la tasa de calibración de un día, comparada con los 30 días normales anteriores. ` +
+  (primeraPost ? `Desde el día ${primeraPost.d}, ${despues.length} de los ${D.control.filter(c => c.d > D.corte && c.n >= 50).length} días con datos suficientes quedaron en alarma: el proceso cambió y el modelo sigue esperando la tasa vieja (línea punteada). Esa es la señal para revisar y reentrenar. ` : "") +
+  (antes.length === 0 ? "Antes del corte no hubo ningún día en alarma. "
+    : `Antes del corte hubo ${antes.length} ${antes.length === 1 ? "día" : "días"} en alarma. `) +
+  "Hacé clic en un punto para ir a ese día.";
+
+// ---------- Evidencia ----------
+const K = D.kpi;
+$("textoEvidencia").textContent =
+  `Medido sobre los días ${D.finTrain + 1} a ${D.corte}, que el modelo no vio al entrenar. ` +
+  `Con el mismo cupo de ${pct(D.presupuesto, 0)}, el modelo encuentra ${num(K.lift, 2)} veces más unidades que necesitan calibración que el muestreo al azar ` +
+  `(intervalo de confianza 95%: ${num(K.liftBajo, 2)} a ${num(K.liftAlto, 2)} veces).`;
+$("comparar").innerHTML = `
+  <div class="kpi"><span class="grande">${pct(K.tasaAzar)}</span><span class="muted">de las revisadas al azar necesitan calibración</span></div>
+  <div class="kpi"><span class="grande" style="color:var(--accent)">${pct(K.diariaPrecision)}</span><span class="muted">de las elegidas por el modelo cada día (${num(K.diariaRevisados)} revisadas)</span></div>`;
+$("variantes").innerHTML = D.comparacion.map(r =>
+  `<tr><td>${esc(r.modelo)}</td><td>${pct(r.precision)}</td><td>${num(r.lift, 2)}</td></tr>`).join("");
+
+(function dibujarCaptura() {
+  const W = 440, H = 320, m = { l: 46, r: 14, t: 14, b: 40 };
+  const pw = W - m.l - m.r, ph = H - m.t - m.b, xMax = 50;
+  const yMax = Math.ceil(Math.max(D.captura[xMax] * 100, 50) / 10) * 10;
+  const x = v => m.l + v / xMax * pw, y = v => m.t + ph - v / yMax * ph;
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Curva de captura: porcentaje de calibraciones encontradas según porcentaje de autos revisados">`;
+  for (let v = 0; v <= yMax; v += 10) {
+    s += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/>`;
+    s += `<text x="${m.l - 6}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="var(--muted)">${v}%</text>`;
+  }
+  for (let v = 0; v <= xMax; v += 10)
+    s += `<text x="${x(v)}" y="${H - 22}" text-anchor="middle" font-size="11" fill="var(--muted)">${v}%</text>`;
+  s += `<text x="${m.l + pw / 2}" y="${H - 4}" text-anchor="middle" font-size="12" fill="var(--muted)">autos revisados (de mayor a menor riesgo)</text>`;
+  s += `<line x1="${x(0)}" y1="${y(0)}" x2="${x(xMax)}" y2="${y(xMax)}" stroke="var(--muted)" stroke-width="1.5"/>`;
+  const pts = D.captura.slice(0, xMax + 1).map((c, i) => `${x(i)},${y(c * 100)}`).join(" ");
+  s += `<polyline fill="none" stroke="var(--accent)" stroke-width="2.5" points="${pts}"/>`;
+  const q = D.presupuesto * 100, c5 = D.captura[Math.round(q)] * 100;
+  s += `<line x1="${x(q)}" x2="${x(q)}" y1="${m.t}" y2="${y(0)}" stroke="var(--safety)" stroke-width="2"/>`;
+  s += `<circle cx="${x(q)}" cy="${y(c5)}" r="4" fill="var(--accent)"/>`;
+  s += `<text x="${x(q) + 8}" y="${m.t + 12}" font-size="12" fill="var(--ink)">revisando el ${q}%: ${num(c5, 1)}% de las calibraciones</text>`;
+  s += `<text x="${x(q) + 8}" y="${m.t + 28}" font-size="12" fill="var(--muted)">(al azar: ${q}%)</text>`;
+  s += "</svg>";
+  $("captura").innerHTML = s;
+})();
+
+// ---------- Importancia ----------
+const maxImp = Math.max(...D.importancia.map(i => i.valor), 1e-9);
+$("importancia").innerHTML = D.importancia.map(i =>
+  `<span>${esc(i.nombre)}</span><div class="b" style="width:${Math.max(1, i.valor / maxImp * 100).toFixed(1)}%"></div>`).join("");
+$("textoComponentes").textContent =
+  `Sobre la lista «Qué revisar primero»: en las unidades calibradas del período de prueba, el componente real estuvo entre los 3 sugeridos en el ${pct(K.aciertoComponentes, 0)} de los casos. Sugiriendo siempre los 3 componentes más frecuentes, el acierto habría sido ${pct(K.aciertoFrecuentes, 0)}.`;
+
+mostrarDia();
+</script>
+</body>
+</html>
